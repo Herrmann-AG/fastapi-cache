@@ -95,9 +95,9 @@ def _store_fk_constraints(input_obj: Any, return_model: ModelMetaclass) -> Any:
     :param input_obj: Instance of a pydantic model, containing all data
     :param return_model: Pydantic meta class of a response model
     """
-    cache_data = input_obj.dict()
+    cache_data = input_obj.model_dump()
 
-    for field in return_model.__fields__.keys():
+    for field in return_model.model_fields.keys():
         if field.startswith("fk_"):
             cache_data[field] = getattr(input_obj, field)
 
