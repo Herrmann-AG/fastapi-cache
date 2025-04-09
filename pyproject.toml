@@ -23,7 +23,7 @@ importlib-metadata = { version = "^6.6.0", python = "<3.8" }
 pendulum = "^3.0.0"
 aiomcache = { version = "^0.8.2", optional = true }
 aiobotocore = {version = "^2.13.1", optional = true}
-redis = {version = "^5.0.8", extras = ["redis"]}
+redis = {version = "^5.0.8"}
 
 [tool.poetry.group.linting]
 optional = true
