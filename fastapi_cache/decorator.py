@@ -3,6 +3,7 @@ import sys
 from functools import wraps
 from inspect import Parameter, Signature, isawaitable, iscoroutinefunction
 from typing import (
+    Any,
     Awaitable,
     Callable,
     List,
@@ -23,6 +24,7 @@ from fastapi.dependencies.utils import (
     get_typed_return_annotation,
     get_typed_signature,
 )
+from sqlmodel.main import ModelMetaclass
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.status import HTTP_304_NOT_MODIFIED
@@ -82,6 +84,24 @@ def _uncacheable(request: Optional[Request]) -> bool:
     if request.method != "GET":
         return True
     return request.headers.get("Cache-Control") == "no-store"
+
+
+def _store_fk_constraints(input_obj: Any, return_model: ModelMetaclass) -> Any:
+    """
+    Takes any pydantic object with data as input and transforms it
+    into an object of the specifield model.
+    Considers all foreign key constraints to keep all data.
+
+    :param input_obj: Instance of a pydantic model, containing all data
+    :param return_model: Pydantic meta class of a response model
+    """
+    cache_data = input_obj.dict()
+
+    for field in return_model.__fields__.keys():
+        if field.startswith("fk_"):
+            cache_data[field] = getattr(input_obj, field)
+
+    return return_model(**cache_data)
 
 
 def cache(
@@ -185,7 +205,8 @@ def cache(
 
             if cached is None  or (request is not None and request.headers.get("Cache-Control") == "no-cache") :  # cache miss
                 result = await ensure_async_func(*args, **kwargs)
-                to_cache = coder.encode(result)
+                typed_result = _store_fk_constraints(result, return_type)
+                to_cache = coder.encode(typed_result)
 
                 try:
                     await backend.set(cache_key, to_cache, expire)
