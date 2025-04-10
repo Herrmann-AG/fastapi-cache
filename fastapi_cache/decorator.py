@@ -1,3 +1,4 @@
+import inspect
 import logging
 import sys
 from functools import wraps
@@ -24,7 +25,7 @@ from fastapi.dependencies.utils import (
     get_typed_return_annotation,
     get_typed_signature,
 )
-from sqlmodel.main import ModelMetaclass
+from sqlmodel.main import ModelMetaclass, SQLModelMetaclass
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.status import HTTP_304_NOT_MODIFIED
@@ -84,6 +85,22 @@ def _uncacheable(request: Optional[Request]) -> bool:
     if request.method != "GET":
         return True
     return request.headers.get("Cache-Control") == "no-store"
+
+
+def _get_typed_response_model(call: Callable[..., Any]) -> SQLModelMetaclass:
+    """
+    Gets the actual response model defined for the fastapi endpoint.
+    Used instead of reading the return type annotation which could be different.
+
+    :param call: Function defined for the endpoint
+    """
+    model_source = inspect.getsource(call)
+    model_name = model_source.split("response_model=")[1].split(",")[0]
+
+    models = __import__("app.models", fromlist=[model_name])
+    response_model = getattr(models, model_name)
+
+    return response_model
 
 
 def _store_fk_constraints(input_obj: Any, return_model: ModelMetaclass) -> Any:
@@ -205,7 +222,8 @@ def cache(
 
             if cached is None  or (request is not None and request.headers.get("Cache-Control") == "no-cache") :  # cache miss
                 result = await ensure_async_func(*args, **kwargs)
-                typed_result = _store_fk_constraints(result, return_type)
+                response_type = _get_typed_response_model(func)
+                typed_result = _store_fk_constraints(result, response_type)
                 to_cache = coder.encode(typed_result)
 
                 try:
