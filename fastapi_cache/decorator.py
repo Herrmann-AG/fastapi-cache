@@ -1,3 +1,4 @@
+import ast
 import inspect
 import logging
 import sys
@@ -95,7 +96,12 @@ def _get_typed_response_model(call: Callable[..., Any]) -> SQLModelMetaclass:
     :param call: Function defined for the endpoint
     """
     model_source = inspect.getsource(call)
-    model_name = model_source.split("response_model=")[1].split(",")[0]
+    tree = ast.parse(model_source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            for kw in node.keywords:
+                if kw.arg == "response_model":
+                    model_name = kw.value.id
 
     models = __import__("app.models", fromlist=[model_name])
     response_model = getattr(models, model_name)
